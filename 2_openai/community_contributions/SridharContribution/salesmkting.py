@@ -8,11 +8,12 @@ Dependencies (install via: pip install -r requirements.txt):
 
 from dotenv import load_dotenv
 import os
+from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To, Content
 from dotenv import load_dotenv
-from agents import Agent, OpenAIChatCompletionsModel, Runner, trace, function_tool
+from agents import Agent, GuardrailFunctionOutput, OpenAIChatCompletionsModel, Runner, input_guardrail, output_guardrail, trace, function_tool
 from openai.types.responses import ResponseTextDeltaEvent
 from typing import Dict
 import asyncio
@@ -67,7 +68,17 @@ def send_email(body: str):
     sg.client.mail.send.post(request_body=mail)
     return {"status": "success"}
 
+class NameCOutputOutput(BaseModel):
+    is_Professional: bool= Field(description="Indicates if the content is professional.")
+
+# @output_guardrail
+# async def guardrail_against_output(ctx, agent, message):
+#     result = await Runner.run(cowboy_agent, message, context=ctx.context)
+#     return GuardrailFunctionOutput(output_info={"review": "output validated"}, tripwire_triggered=False)
+
+
 async def main():
+    
     # from_addr = os.environ.get('EMAIL_FROM', 'sridharhere@gmail.com')
     # to_addr = os.environ.get('EMAIL_TO', 'k.avinashca@gmail.com')
     # status = send_test_email(from_addr, to_addr)
@@ -87,20 +98,46 @@ async def main():
     deepseek_client = AsyncOpenAI(base_url=DEEPSEEK_BASE_URL, api_key=deepseek_api_key)
     deepseek_model = OpenAIChatCompletionsModel(model="deepseek-chat", openai_client=deepseek_client)
 
-    EnterpriseArchitect_agent1 = Agent(
-            name="Enterprise Agentic AI Architect Sales Agent",
-            instructions=instructions1,
-            model="gpt-4o-mini"
+
+
+    print(NameCOutputOutput.model_json_schema)
+
+    instructions3 = "speak like a cowboy  and in a non professional tone"
+
+    checked_agent = Agent(
+      
+        name="Checked Agent",
+        instructions= instructions3,
+        model="gpt-4o-mini",
+        output_type=NameCOutputOutput 
     )
+    result = await Runner.run(checked_agent, "Write a content for linkedin and other social media platforms. It should be engaging")
+
+
+    instructions4 = "speak like a cowboy  and in a non professional tone"
+    cowboy_agent = Agent(
+            name="Cowboy Agentic AI Architect Sales Agent",
+            instructions=instructions4,
+            model="gpt-4o-mini",
+            output_type=NameCOutputOutput
+        )
+    result = await Runner.run(cowboy_agent, "Write a content for linkedin and other social media platforms. It should be engaging  and detailed with sections ine eplaining the various gaurdrails,data leakage,prompt injection and governance.It should have a image to illustrate the concepts and also how to overcome these in enterprise world.Number of workds should not cross 400 words and should be in a professional tone and human generated content. It should be in a blog format with sections and sub-sections and also have a conclusion at the end.Create html page with image")
+    print("Cowboy Agent Result:", result.final_output)
+    EnterpriseArchitect_agent1 = Agent(
+                name="Enterprise Agentic AI Architect Sales Agent",
+                instructions=instructions1,
+                model="gpt-4o-mini"
+        )
 
     EnterpriseArchitect_agent2 = Agent(
             name="Enterprise Agentic AI Architect Sales Agent",
             instructions=instructions2,
             model=deepseek_model
     )
-    print(EnterpriseArchitect_agent1)
-    print(EnterpriseArchitect_agent2)
-    print(send_email)
+    # print(cowboy_agent)
+    # print(EnterpriseArchitect_agent1)
+    # print(EnterpriseArchitect_agent2)
+    # print(send_email)
 
     description = "You are assigned to write a professional content, architecturing concepets for publishing in Linkedin and other social media platforms. It should be engaging  and detailed with sections ine eplaining the various gaurdrails,data leakage,prompt injection and governance.It should have a image to illustrate the concepts and also how to overcome these in enterprise world.Number of workds should not cross 400 words and should be in a professional tone and human generated content. It should be in a blog format with sections and sub-sections and also have a conclusion at the end.Create html page with image"
 
@@ -131,11 +168,21 @@ async def main():
 
     message = "Send an  email addressed to 'Dear Sridhar Kidambi'"
 
-    with trace("EA manager"):
-        result = await Runner.run(EA_manager, message)
+    # with trace("EA manager"):
+    #     result = await Runner.run(EA_manager, message)
 
+
+
+
+
+# @input_guardrail
+# async def guardrail_against_name(ctx, agent, message):
+#     result = await Runner.run(guardrail_agent, message, context=ctx.context)
+#     is_name_in_message = result.final_output.is_professional
+#     return GuardrailFunctionOutput(output_info={"review": result.final_output},tripwire_triggered=is_name_in_message)
 
 if __name__ == '__main__':
     asyncio.run(main())
 
     # https://platform.openai.com/logs/trace?trace_id=trace_ca895754d661403ab1470ed3a4c88e5e
+
