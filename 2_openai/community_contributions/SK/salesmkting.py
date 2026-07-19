@@ -21,6 +21,22 @@ import asyncio
 
 load_dotenv(override=True)
 
+def send_email_tool(subject: str, text_body: str, html_body: str) -> str:
+    """
+    Send out an email with the given subject and body to all sales prospects
+    
+    Args:
+        subject: The subject of the email
+        text_body: The body of the email as plain text
+        html_body: The HTML body of the email
+    """
+    sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
+    from_email = Email("sridharhere@gmail.com")  # Change to your verified sender
+    to_email = To("sridharkidambi@zohomail.com")  # Change to your recipient
+    content = Content("text/html", html_body)
+    mail = Mail(from_email, to_email, "Sales email", content).get()
+    sg.client.mail.send.post(request_body=mail)
+    return {"status": "success"}
 
 def send_test_email(from_address: str, to_address: str) -> int:
     """Send a simple HTML test email via SendGrid. Returns HTTP status code."""
@@ -69,12 +85,35 @@ def send_email(body: str):
     return {"status": "success"}
 
 class NameCOutputOutput(BaseModel):
-    is_Professional: bool= Field(description="Indicates if the content is professional.")
+    is_Professional: bool= Field(description="Indicates if the wordings is professional in english.")
+
+# Create cowboy_agent at module level to avoid scope issues
+cowboy_agent = Agent(
+    name="Cowboy Agentic AI Architect Sales Agent",
+    instructions="speak like a uneducated ,gibberish muttal like mode language with tanglish  and in a non professional tone",
+    model="gpt-4o-mini",
+    output_type=NameCOutputOutput
+)
+
+# Create checked_agent at module level for guardrail
+checked_agent = Agent(
+    name="Checked Agent",
+    instructions="speak like a cowboy mutta paiyyan mode and in a non professional tone",
+    model="gpt-4o-mini",
+    output_type=NameCOutputOutput
+)
 
 # @output_guardrail
 # async def guardrail_against_output(ctx, agent, message):
 #     result = await Runner.run(cowboy_agent, message, context=ctx.context)
 #     return GuardrailFunctionOutput(output_info={"review": "output validated"}, tripwire_triggered=False)
+
+@output_guardrail
+async def email_guardrail(ctx, agent, message):
+    result = await Runner.run(checked_agent, message, context=ctx.context)
+    review = result.final_output
+    is_problem = not result.final_output.is_Professional
+    return GuardrailFunctionOutput(output_info={"review": review},tripwire_triggered=is_problem)
 
 
 async def main():
@@ -100,29 +139,35 @@ async def main():
 
 
 
-    print(NameCOutputOutput.model_json_schema)
+    print(NameCOutputOutput.model_json_schema())
 
-    instructions3 = "speak like a cowboy  and in a non professional tone"
+    instructions3 = "speak like a cowboy  mutta paiyyan mode and in a non professional tone"
 
-    checked_agent = Agent(
+    # checked_agent = Agent(
       
-        name="Checked Agent",
-        instructions= instructions3,
-        model="gpt-4o-mini",
-        output_type=NameCOutputOutput 
-    )
-    result = await Runner.run(checked_agent, "Write a content for linkedin and other social media platforms. It should be engaging")
+    #     name="Checked Agent",
+    #     instructions= instructions3,
+    #     model="gpt-4o-mini",
+    #     output_type=NameCOutputOutput 
+    # )
+    # result = await Runner.run(checked_agent, "Write a english professional. content for linkedin and other social media platforms. It should be engaging")
 
 
-    instructions4 = "speak like a cowboy  and in a non professional tone"
+    instructions4 = "speak like a uneducated ,gibberish   and in a non professional tone"
+    instructions5 = "speak like a educated and in a  professional tone"
+
     cowboy_agent = Agent(
-            name="Cowboy Agentic AI Architect Sales Agent",
+            name="Cowboy Output Guardrails Agent",
             instructions=instructions4,
             model="gpt-4o-mini",
-            output_type=NameCOutputOutput
+            output_guardrails=[email_guardrail],
         )
-    result = await Runner.run(cowboy_agent, "Write a content for linkedin and other social media platforms. It should be engaging  and detailed with sections ine eplaining the various gaurdrails,data leakage,prompt injection and governance.It should have a image to illustrate the concepts and also how to overcome these in enterprise world.Number of workds should not cross 400 words and should be in a professional tone and human generated content. It should be in a blog format with sections and sub-sections and also have a conclusion at the end.Create html page with image")
-    print("Cowboy Agent Result:", result.final_output)
+    from agents.exceptions import OutputGuardrailTripwireTriggered
+    try:
+        result = await Runner.run(cowboy_agent, "Write a content for linkedin and other social media platforms. It should be engaging  and detailed with sections ine eplaining the various gaurdrails,data leakage,prompt injection and governance.It should have a image to illustrate the concepts and also how to overcome these in enterprise world.Number of workds should not cross 400 words and should be in a professional tone and human generated content. It should be in a blog format with sections and sub-sections and also have a conclusion at the end.Create html page with image")
+        print("Cowboy Agent Result:", result.final_output)
+    except OutputGuardrailTripwireTriggered as e:
+        print("Guardrail triggered: output was not professional. Blocked by email_guardrail.")
     EnterpriseArchitect_agent1 = Agent(
                 name="Enterprise Agentic AI Architect Sales Agent",
                 instructions=instructions1,
